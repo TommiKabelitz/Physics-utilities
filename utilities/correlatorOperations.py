@@ -6,7 +6,7 @@ import numpy as np
 
 from utilities import configIDs as cfg
 
-
+# Regex patterns for parsing cfun_paths
 kappa_pattern = re.compile(r"\/k(\d{5})\/")
 kd_pattern = re.compile(r"\/BF([-+]?\d)\/")
 shift_pattern = re.compile(r"\/sh(([xyzt]\d+)+|(None))\/")
@@ -33,10 +33,30 @@ class CfunMomentum:
 
 class ExceptionalConfig:
     def __init__(self, kappa: int, configID: cfg.ConfigID, shift: str):
+        """
+        Convenient class to hold details of exceptional configurations
+
+        Initialised with the relevant kappa, configID and shift of an exceptional
+        configuration. Contains methods for initialisation also from cfun_path and 
+        from a string form which this class can also generate for easy permanent
+        storage.
+
+        Parameters
+        ----------
+        kappa : int
+            The kappa value of the configuration
+        configID : cfg.ConfigID
+            A configID object containing the information about the configID
+        shift : str
+            The gauge shift of the configuration
+        """
         self.kappa = kappa
         self.configID = configID
         self.shift = shift
+        self._verify_init()
 
+    # hash, eq, and neq allow use in sets, dict keys and also allows
+    # comparison between configurations
     def __hash__(self):
         return hash((self.kappa, self.configID, self.shift))
 
@@ -52,39 +72,79 @@ class ExceptionalConfig:
 
     @property
     def full_string(self):
+        """Relevant information as a string. For file storage.
+        eg. 13781 -kM-001670 x23y27z02t00"""
         return f"{self.kappa} {str(self.configID)} {self.shift}"
 
     @staticmethod
     def init_from_string(exceptional_string: str):
+        """Init the class from a string in the form returned by
+        ExceptionalConfig.full_string."""
         kappa, config_str, shift = exceptional_string.split(" ")
         configID = cfg.ConfigID(int(kappa), ID_str=config_str)
         return ExceptionalConfig(int(kappa), configID, shift)
 
     @staticmethod
-    def init_from_cfun_path(cfun_path: os.PathLike):
-        cfun = CfunMetadata(cfun_path)
+    def init_from_cfun_path(cfun_path: os.PathLike, **kwargs):
+        """
+        Initialises the object from a full path to a correlation function.
+        
+        Uses the CfunMetadata constructor to parse the cfun, kwargs are passed
+        to that constructor.
+        """
+        cfun = CfunMetadata(cfun_path, **kwargs)
         try:
-            ExceptionalConfig(
+            return ExceptionalConfig(
                 cfun.kappa, cfg.ConfigID(cfun.kappa, ID_str=cfun.configID), cfun.shift
             )
         except AttributeError:
             raise ValueError(
-                "Could not extract kappa, configID and shift from cfun_path."
+                f"Could not extract kappa, configID and shift from {cfun_path=}."
             )
 
+    
+    def _verify_init(self):
+        """Verify that kappa, configID and shift are set and not none"""
+        for prop in ("kappa", "configID", "shift"):
+            try:
+                if getattr(self, prop) is None:
+                    raise ValueError("Exceptional configuration initialisation failed, {prop} is None")
+            except AttributeError:
+                raise ValueError("Exceptional configuration initialisation failed, {prop} is unset")
 
 class CfunMetadata:
-    def __init__(self, cfun_path: os.PathLike):
+    # If cfun name structure changes, the regex at the
+    # top of this file will likely need to change.
+    def __init__(self, cfun_path: os.PathLike, **kwargs):
+        """
+        Class to hold the metadata for correlation functions.
+
+        Constructed from a path to a correlation function using
+        regex pattern matching. Key word arguments are included as
+        extra metadata properties.
+
+        Parameters
+        ----------
+        cfun_path : os.PathLike
+            Full path to the correlation function.
+        """
+        for prop, val in kwargs.items():
+            if prop in ("kd", "kappa"):
+                val = int(val)
+            setattr(self, prop, val)
         for prop, val in self.parse_cfun_path(cfun_path).items():
             if prop in ("kd", "kappa"):
                 val = int(val)
             setattr(self, prop, val)
+            
         self.cfun_path = cfun_path
 
     @staticmethod
     def parse_cfun_path(cfun_path: os.PathLike) -> dict:
-        # /scratch/e31/tk9944/WorkingStorage/PhDRunThree/k13781/BF1/cfuns/shx23y08z26t00/SOsm250_icfg-kM-001630silp96.cascade0_1cascade0_1bar_uds.u.2cf
-        # kappa, kd, shift, source, configID, sink, operator, operatorbar, structure
+        """Parses a correlation function using regex. Expected form of the correlation function:
+        /scratch/e31/tk9944/WorkingStorage/PhDRunThree/k13781/BF1/cfuns/shx23y08z26t00/SOsm250_icfg-kM-001630silp96.cascade0_1cascade0_1bar_uds.u.2cf"""
+        
+        # Use search so that we can obtain only the capturing group
         matches = dict(
             kappa=re.search(kappa_pattern, cfun_path),
             kd=re.search(kd_pattern, cfun_path),
@@ -95,6 +155,7 @@ class CfunMetadata:
             operator=re.search(operator_pattern, cfun_path),
             structure=re.search(structure_pattern, cfun_path),
         )
+        # The actual values are at location 1 in the groups, 0 is the full match
         return {key: val.group(1) for key, val in matches.items() if val is not None}
 
 
