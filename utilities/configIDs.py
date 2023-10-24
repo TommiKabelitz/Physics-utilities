@@ -19,6 +19,7 @@ def _k_13700(runPrefix):
     return {
         "kappa": 13700,
         "m_pi": 701,
+        "m_pi_phys": 623,
         "a": 0.1022,
         "start": start,
         "ncon": ncon,
@@ -46,6 +47,7 @@ def _k_13727(runPrefix):
     return {
         "kappa": 13727,
         "m_pi": 570,
+        "m_pi_phys": 515,
         "a": 0.10086,
         "start": start,
         "ncon": ncon,
@@ -76,6 +78,7 @@ def _k_13754(runPrefix):
     return {
         "kappa": 13754,
         "m_pi": 411,
+        "m_pi_phys": 391,
         "a": 0.0961,
         "start": start,
         "ncon": ncon,
@@ -106,6 +109,7 @@ def _k_13770(runPrefix):
     return {
         "kappa": 13770,
         "m_pi": 296,
+        "m_pi_phys": 280,        
         "a": 0.0951,
         "start": start,
         "ncon": ncon,
@@ -145,6 +149,7 @@ def _k_13781(runPrefix):
     return {
         "kappa": 13781,
         "m_pi": 156,
+        "m_pi_phys": None,
         "a": 0.0933,
         "start": start,
         "ncon": ncon,
