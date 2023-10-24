@@ -16,18 +16,24 @@ class WeightedAverage:
         data: pd.DataFrame,
         value_col_labels: list[str],
         var_col_labels: list[str],
+        err_label: str,
         chi2_label: str = "chi2",
         ndof_label: str = "ndof",
     ):
         """
-        Class to determine the weighted average of some data given the values, VARIANCES, chi squares and number of degrees of freedom. Based on arxiv.org/abs/2003.12130.`
+        Class to determine the weighted average of some data given the values, VARIANCES, chi 
+        squares and number of degrees of freedom. Based on arxiv.org/abs/2003.12130.`
 
         The weighted average uses the chi_square distribution to give fits p-values from which
-        weights may be assigned. This interface allows an arbitrary number of datasets to be averaged based on the same chisquare and n degrees of freedom for each dataset. The number of values to be averaged is also arbitrary.
+        weights may be assigned. This interface allows an arbitrary number of datasets to be 
+        averaged based on the same chisquare and n degrees of freedom for each dataset. The number 
+        of values to be averaged is also arbitrary.
 
-        Data should be formatted in a DataFrame with a column of chi^2 values and a column of degrees of freedom. The actual values and variances must be further columns of the DataFrame.
+        Data should be formatted in a DataFrame with a column of chi^2 values and a column of 
+        degrees of freedom. The actual values and variances must be further columns of the DataFrame.
 
-        All column labels must be specified as arguments at initialisation. The value and variance column labels are assumed to match elementwise.
+        All column labels must be specified as arguments at initialisation. 
+        The value and variance column labels are assumed to match elementwise.
 
         Parameters
         ----------
@@ -38,6 +44,8 @@ class WeightedAverage:
             of this list will be matched with the ith element of var_col_labels.
         var_col_labels : list[str]
             As value_col_labels but for the variances
+        err_label : str
+            The column label to use as the uncertainty for calculating the weights
         chi2_label : str, optional
             Column label for column holding chi square values. Note: not reduced chi square, by default "chi2"
         ndof_label : str, optional
@@ -57,6 +65,7 @@ class WeightedAverage:
         self.labels = Labels(
             chi2=chi2_label,
             ndof=ndof_label,
+            err=err_label,
             value_cols=value_col_labels,
             variance_cols=var_col_labels,
         )
@@ -110,7 +119,7 @@ class WeightedAverage:
             total_uncertainty = np.sqrt(stat_var + sys_var)
             result = gv.gvar(weighted_average, total_uncertainty)
             values.append(result)
-            logger.debug(f"{result =}")
+            logger.debug(f"{result = }")
 
         return values
 
@@ -127,12 +136,12 @@ class WeightedAverage:
         """
 
         logger.debug("Calculating weights")
-        self.working_df["pvalue"] = self.data.apply(self.df_p_value, axis=1)
-        # Required for normalisation of the weights
-        p_value_inv_sq_sum = (self.working_df["pvalue"] ** (-2)).sum()
+        self.working_df["p_value"] = self.data.apply(self.df_p_value, axis=1)
+        self.working_df["err"] = self.data[self.labels.err]
+        normalisation = (self.working_df["err"] ** (-2) * self.working_df["p_value"]).sum()
 
         self.working_df["weight"] = self.working_df.apply(
-            self.df_weight, axis=1, p_value_inv_sq_sum=p_value_inv_sq_sum
+            self.df_weight, axis=1, normalisation=normalisation
         )
         return self.working_df["weight"].to_numpy()
 
@@ -143,9 +152,9 @@ class WeightedAverage:
         return gamma_dist.pdf(Ndof / 2, chi_square / 2) / gamma_fun(Ndof / 2)
 
     @staticmethod
-    def weight(p_value: float, p_value_inv_sq_sum: float):
+    def weight(p_value: float, error: float, normalisation: float):
         """Calculate the relative weight based on the p_value and the normalisation."""
-        return p_value ** (-2) / p_value_inv_sq_sum
+        return p_value * error ** (-2) / normalisation
 
     @staticmethod
     def df_p_value(df_row):
@@ -153,9 +162,11 @@ class WeightedAverage:
         return WeightedAverage.p_value(df_row["ndof"], df_row["chi2"])
 
     @staticmethod
-    def df_weight(df_row, p_value_inv_sq_sum):
+    def df_weight(df_row, normalisation: float):
         """For applying weight to a DataFrame"""
-        return WeightedAverage.weight(df_row["pvalue"], p_value_inv_sq_sum)
+        return WeightedAverage.weight(
+            df_row["p_value"], df_row["err"], normalisation
+        )
 
     @property
     def weights(self):
@@ -169,7 +180,7 @@ class WeightedAverage:
     @property
     def p_values(self):
         try:
-            return self.working_df["pvalue"]
+            return self.working_df["p_value"]
         except KeyError:
             raise ValueError(
                 "P values not calculated yet. Call calculate_weights or do_average to calculate P values."
@@ -178,11 +189,17 @@ class WeightedAverage:
 
 class Labels:
     def __init__(
-        self, chi2: str, ndof: str, value_cols: list[str], variance_cols: list[str]
+        self,
+        chi2: str,
+        ndof: str,
+        err: str,
+        value_cols: list[str],
+        variance_cols: list[str],
     ):
         """Simple class to hold labels for the weighted averaging class"""
         self.chi2 = chi2
         self.ndof = ndof
+        self.err = err
         if len(value_cols) != len(variance_cols):
             raise ValueError("Size mismatch between value and error columns.")
         self.value_cols = value_cols
