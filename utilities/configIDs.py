@@ -2,27 +2,25 @@ import re
 
 runID_pattern = re.compile(r"(a|b|gM|hM|iM|jM|kM)")
 
+# Functions holding the details for each ensemble. 
+# Could really just be one dict but when I wrote it
+# a long time ago I used functions because I was dumb.
+# Now I can't be bothered fixing it
 
 # 13700
-def _k_13700(runPrefix):
+def _k_13700():
     """_
     Hea_viest PACS-CS ensemble.
     kap_pa: 13700
     m_p_i:  701 MeV
     a:     0.1022 fm
     """
-    if runPrefix == "b":
-        start = 2510
-        ncon = 400  # Technically 399 as one 4300 does not exist
-    else:
-        raise ValueError("Invalid (kappa,prefix) combination. Terminating")
     return {
         "kappa": 13700,
+        "prefixes": ("b"),
         "m_pi": 701,
         "m_pi_phys": 623,
         "a": 0.1022,
-        "start": start,
-        "ncon": ncon,
         "traj_store": 10,
         "tau": 0.5,
         "rho": None,
@@ -32,25 +30,19 @@ def _k_13700(runPrefix):
 
 
 # 13727
-def _k_13727(runPrefix):
+def _k_13727():
     """
     Second heaviest PACS-CS ensemble.
     kappa: 13727
     m_pi:  570 MeV
     a:     0.10086 fm
     """
-    if runPrefix == "b":
-        start = 1310
-        ncon = 400
-    else:
-        raise ValueError("Invalid (kappa,prefix) combination. Terminating")
     return {
         "kappa": 13727,
+        "prefixes": ("b"),
         "m_pi": 570,
         "m_pi_phys": 515,
         "a": 0.10086,
-        "start": start,
-        "ncon": ncon,
         "traj_store": 10,
         "tau": 0.5,
         "rho": None,
@@ -60,28 +52,19 @@ def _k_13727(runPrefix):
 
 
 # 13754
-def _k_13754(runPrefix):
+def _k_13754():
     """
     Middle PACS-CS ensemble.
     kappa: 13754
     m_pi:  411 MeV
     a:     0.0961 fm
     """
-    if runPrefix == "a":
-        start = 2510
-        ncon = 200
-    elif runPrefix == "b":
-        start = 2510
-        ncon = 250
-    else:
-        raise ValueError("Invalid (kappa,prefix) combination. Terminating")
     return {
         "kappa": 13754,
+        "prefixes": ("a", "b"),
         "m_pi": 411,
         "m_pi_phys": 391,
         "a": 0.0961,
-        "start": start,
-        "ncon": ncon,
         "traj_store": 10,
         "tau": 0.5,
         "rho": None,
@@ -91,28 +74,19 @@ def _k_13754(runPrefix):
 
 
 # 13770
-def _k_13770(runPrefix):
+def _k_13770():
     """
     Second lightest PACS-CS ensemble.
     kappa: 13770
     m_pi:  296 MeV
     a:     0.0951 fm
     """
-    if runPrefix == "a":
-        start = 1880
-        ncon = 400
-    elif runPrefix == "b":
-        start = 1780
-        ncon = 400
-    else:
-        raise ValueError("Invalid (kappa,prefix) combination. Terminating")
     return {
         "kappa": 13770,
+        "prefixes": ("a", "b"),
         "m_pi": 296,
-        "m_pi_phys": 280,        
+        "m_pi_phys": 280,
         "a": 0.0951,
-        "start": start,
-        "ncon": ncon,
         "traj_store": 10,
         "tau": 0.25,
         "rho": None,
@@ -122,37 +96,19 @@ def _k_13770(runPrefix):
 
 
 # 13781
-def _k_13781(runPrefix):
+def _k_13781():
     """
     Lightest PACS-CS ensemble. 5 runs, 198 total configurations
     kappa: 13781
     m_pi:  156 MeV
     a:     0.0933 fm
     """
-    if runPrefix == "gM":
-        start = 1200
-        ncon = 44
-    elif runPrefix == "hM":
-        start = 1240
-        ncon = 22
-    elif runPrefix == "iM":
-        start = 870
-        ncon = 44
-    elif runPrefix == "jM":
-        start = 260
-        ncon = 44
-    elif runPrefix == "kM":
-        start = 1090
-        ncon = 44
-    else:
-        raise ValueError("Invalid (kappa,prefix) combination. Terminating")
     return {
         "kappa": 13781,
+        "prefixes": ("gM", "hM", "iM", "jM", "kM", "M"),
         "m_pi": 156,
         "m_pi_phys": None,
         "a": 0.0933,
-        "start": start,
-        "ncon": ncon,
         "traj_store": 20,
         "tau": 0.5,
         "rho": 0.995,
@@ -161,18 +117,19 @@ def _k_13781(runPrefix):
     }
 
 
-# 12400
-def _k_12400(runPrefix):
-    """
-    This is for free field testing, the start point and number of configurations are arbitrary as
-    there are no configuration files here. COLA will simply generate the 'gauge field' in this case.
-    """
-    start = 1000
-    ncon = 5
-    return {"start": start, "ncon": ncon}
+# Deprecated - but still can be used in cola
+# # 12400
+# def _k_12400():
+#     """
+#     This is for free field testing, the start point and number of configurations are arbitrary as
+#     there are no configuration files here. COLA will simply generate the 'gauge field' in this case.
+#     """
+#     start = 1000
+#     ncon = 5
+#     return {"start": start, "ncon": ncon}
 
 
-def _config_details(kappa: int, runID: str) -> dict:
+def _config_details(kappa: int) -> dict:
     """
     Get the details of the PACS configuration.
 
@@ -187,10 +144,29 @@ def _config_details(kappa: int, runID: str) -> dict:
         13754: _k_13754,
         13770: _k_13770,
         13781: _k_13781,
-        12400: _k_12400,
     }
     case = switch[kappa]
-    return case(runID)
+    return case()
+
+
+startIDs_13781 = {
+    1: "gM",
+    45: "hM",
+    67: "iM",
+    111: "jM",
+    155: "kM",
+    199: "end",
+}  # Just easier to add the end point to the dict
+
+def runIDs_13781(ith_config: int) -> str:
+    """Return the run ID associated with a configuration at 13781
+    when all runs are chained together from 1 -> 198."""
+    starts = startIDs_13781.keys()
+    for previous_start, this_start in zip(starts[:-1], starts[1:]):
+        if this_start > ith_config:
+            return startIDs_13781[previous_start]
+    else:
+        raise ValueError("Somehow reached end of loop through 13781 IDs")
 
 
 class ConfigID:
@@ -223,7 +199,7 @@ class ConfigID:
             self.runID = self.get_runID(ID_str)
         else:
             self.runID = runID
-        self.ensemble = PACS_ensembles[self.kappa][self.runID]
+        self.ensemble = PACSRun(self.kappa, self.runID)
 
         # Parse the ID string and verify its contents agree with the other passed info
         if ID_str is not None:
@@ -278,55 +254,114 @@ class ConfigID:
 class PACSEnsemble:
     base_filename = "RCNF2+1/RC32x64_B1900Kud0{kappa}00Ks01364000C1715/RC32x64_B1900Kud0{kappa}00Ks01364000C1715{ID_str}"
 
-    def __init__(self, kappa: int, runID: str):
+    def __init__(self, kappa: int):
         """
-        Object for holding information about a specific PACS-CS ensemble. Also contains methods for obtaining configIDs. Direct access to specific ensemble objects should use the PACS_ensembles dictionary instead.
+        Object for holding information about a specific PACS-CS ensemble. 
+        Direct access to specific ensemble objects should use the PACS_ensembles dictionary instead to avoid creating many idential copies of this object.
 
         https://www.jldg.org/ildg-data/PACSCSconfig.html
         """
 
-        details = _config_details(kappa, runID)
+        details = _config_details(kappa)
         for detail, value in details.items():
             setattr(self, detail, value)
 
         self.kappa = kappa
-        self.runID = runID
         self.NS = 32
         self.NT = 64
         self.C_SW = 1.715
         self.beta = 1.9
         self.kappa_strange = 13640
 
+
+class PACSRun:
+    def __init__(self, kappa: int, runID: str):
+        """
+        Extension of the PACSEnsemble object for interacting with
+        actual config IDs. Requires specification of runID.
+
+        Access to all PACSEnsemble properties directly as attributes 
+        of this class. The PACSEnsemble classes are pre-initialised and all
+        instances of this class will point to the same object(s).
+        
+        RunID 'M' is available at 13781 for simplicity of accessing all
+        configurations.
+
+        Parameters
+        ----------
+        kappa : int
+            Kappa value of the ensemble of interest
+        runID : str
+            The runID. eg 'a', 'b', 'hM', 'M' also available.
+        """
+        self.ensemble = PACS_ensembles[kappa]
+        self.runID = runID
+        self.start, self.ncon = self._get_run_details(kappa, runID)
+
+    # TODO: Add this for M
     def get_icon(self, ID_str: str):
         """Extract the ith configuration number from a configuration string."""
+        
+        if self.runID == "M":
+            raise NotImplementedError("Finding icon with runID set as M not supported.")
+        
         num_ID = int(ID_str[-4:])
         icon = (num_ID - self.start) / self.traj_store + 1
         if icon > self.ncon:
             raise ValueError(f"{ID_str = } does not exist at {self.kappa = }.")
         return icon
 
-    def get_ID_str(self, ithConfig: int):
+    def get_ID_str(self, ith_config: int):
         """Form the configuration string corresponding to the ensembles ith configuration."""
-        num_ID = self.start + (ithConfig - 1) * self.traj_store
+        
+        if self.runID == "M":
+            trueID = runIDs_13781(ith_config)
+            return PACSRun(13781, trueID).get_ID_str(ith_config)
+        
+        num_ID = self.start + (ith_config - 1) * self.traj_store
         return f"-{self.runID}-{num_ID:06}"
 
     def filename(self, configID: ConfigID) -> str:
         """Construct the file name corresponding to a particular config ID."""
         return self.base_filename.format(kappa=self.kappa, ID_str=configID.ID_str)
 
+    @staticmethod
+    def _get_run_details(kappa: int, runID: str):
+        try:
+            return PACS_run_details[int(kappa)][runID]
+        except KeyError:
+            raise ValueError("f{kappa = }, {runID = } is an invalid combination")
+        
+    # If cannot find an attribute, check the ensemble
+    def __getattr__(self, attr):
+        try:
+            return getattr(self.ensemble,attr)
+        except AttributeError:
+            raise AttributeError(f"PACSRun has not attribute {attr}")
+
 
 # Dictionary for accessing the PACS ensembles. Otherwise the objects would be
 # needlessly created every time a ConfigID object is created
 PACS_ensembles = {
-    13700: {"b": PACSEnsemble(13700, "b")},
-    13727: {"b": PACSEnsemble(13727, "b")},
-    13754: {"a": PACSEnsemble(13754, "a"), "b": PACSEnsemble(13754, "b")},
-    13770: {"a": PACSEnsemble(13770, "a"), "b": PACSEnsemble(13770, "b")},
+    13700: PACSEnsemble(13700),
+    13727: PACSEnsemble(13727),
+    13754: PACSEnsemble(13754),
+    13770: PACSEnsemble(13770),
+    13781: PACSEnsemble(13781),
+}
+
+
+PACS_run_details = {
+    13700: {"b": (2510, 400)},
+    13727: {"b": (1310, 400)},
+    13754: {"a": (2510, 200), "b": (2510, 250)},
+    13770: {"a": (1880, 400), "b": (1780, 400)},
     13781: {
-        "gM": PACSEnsemble(13781, "gM"),
-        "hM": PACSEnsemble(13781, "hM"),
-        "iM": PACSEnsemble(13781, "iM"),
-        "jM": PACSEnsemble(13781, "jM"),
-        "kM": PACSEnsemble(13781, "kM"),
+        "gM": (1200, 44),
+        "hM": (1240, 22),
+        "iM": (870, 44),
+        "jM": (260, 44),
+        "kM": (1090, 44),
+        "M": (1200, 198),
     },
 }

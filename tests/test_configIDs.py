@@ -3,7 +3,7 @@ import unittest
 from utilities import configIDs as cfg
 
 
-class Test_testConfigIDs(unittest.TestCase):
+class Test_ConfigIDs(unittest.TestCase):
     def test_init_str(self):
         ID_str = "-a-001880"
         id = cfg.ConfigID(13770, ID_str=ID_str)
@@ -38,6 +38,7 @@ class Test_testConfigIDs(unittest.TestCase):
         self.assertRaises(
             ValueError, cfg.ConfigID, 13770, ID_str=ID_str, icon=icon, runID=runID
         )
+    
 
 
 if __name__ == "__main__":
