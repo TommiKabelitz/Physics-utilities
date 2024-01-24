@@ -23,12 +23,12 @@ class Timer:
         self.timerDict[timerName] = [0, False]
 
     def startTimer(self, timerName):
-        print(f"Starting {timerName}")
+        # print(f"Starting {timerName}")
         self.timerDict[timerName][0] -= perf_counter()
         self.timerDict[timerName][1] = True
 
     def stopTimer(self, timerName):
-        print(f"Stopping {timerName}")
+        # print(f"Stopping {timerName}")
         self.timerDict[timerName][0] += perf_counter()
         self.timerDict[timerName][1] = False
 

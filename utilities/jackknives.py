@@ -2,6 +2,7 @@ import functools
 
 import numpy as np
 
+# TODO: Update to allow 2nd order jackknives and also to allow multi-dim arrays
 
 class JackknifeEnsemble:
     def __init__(

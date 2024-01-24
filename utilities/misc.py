@@ -1,4 +1,6 @@
 import itertools as it
+import json
+import os
 import pprint
 import yaml
 
@@ -52,7 +54,24 @@ def Load(parametersFile="", writeOut=False, *args, **kwargs):
     return parameters
 
 
-def pp(toPrint, indent=4, stream=None, to_string = False):
+def load_json(filepath: os.PathLike, encoding: str = "utf-8"):
+    """Read from the given json file."""
+    with open(filepath, "r", encoding=encoding) as f:
+        return json.load(f)
+
+
+def write_json(
+    filepath: os.PathLike,
+    dump_dict: dict,
+    encoding: str = "utf-8",
+    ensure_ascii: bool = False,
+):
+    """Write the given dictionary to the json file path."""
+    with open(filepath, "w", encoding=encoding) as f:
+        json.dump(dump_dict, f, ensure_ascii=ensure_ascii, indent=4)
+
+
+def pp(toPrint, indent=4, stream=None, to_string=False):
     """
     Pretty printer, great for dictionaries.
 
@@ -64,9 +83,8 @@ def pp(toPrint, indent=4, stream=None, to_string = False):
     indent -- int: Distance to indent each new level.
     stream -- fileObject: Where to print to. Default is sys.stdout.
     """
-    printer = pprint.PrettyPrinter(indent = indent, stream=stream)
+    printer = pprint.PrettyPrinter(indent=indent, stream=stream)
 
-    
     if to_string:
         return printer.pformat(toPrint)
     else:

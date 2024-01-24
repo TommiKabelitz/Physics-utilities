@@ -4,19 +4,27 @@ import re
 
 import numpy as np
 
-from utilities import configIDs as cfg
+from utilities import configIDs as cfg, misc
 
 # Regex patterns for parsing cfun_paths
-kappa_pattern = re.compile(r"\/k(\d{5})\/")
-kd_pattern = re.compile(r"\/BF([-+]?\d)\/")
-shift_pattern = re.compile(r"\/sh(([xyzt]\d+)+|(None))\/")
-source_pattern = re.compile(r"SO((sm|lp)\d+)")
-sink_pattern = re.compile(r"si((sm|lp|ln)\d+)")
-configID_pattern = re.compile(r"icfg(-(?:[ab]|[ghijk]M){1}-\d+)")
-operator_pattern = re.compile(r"([\w\d_]+bar)_")
-structure_pattern = re.compile(r"_([udsnlh]+).")
-
-
+tommi_patterns = dict(
+    kappa = re.compile(r"\/k(13\d{3})\/"),
+    kd = re.compile(r"\/BF([-+]?\d)\/"),
+    shift = re.compile(r"\/sh(([xyzt]\d+)+|(None))\/"),
+    source = re.compile(r"SO((sm|lp)\d+)"),
+    sink = re.compile(r"si((sm|lp|ln)\d+)"),
+    configID = re.compile(r"icfg(-(?:[ab]|[ghijk]M){1}-\d+)"),
+    operator = re.compile(r"([\w\d_]+bar)_"),
+    structure = re.compile(r"_([udsnlh]+)."),
+)
+liam_patterns = dict(
+    kappa = re.compile(r"\/(13\d{3})\/"),
+    shift = re.compile(r"\/(([xyzt]\d+)+|(None))\/"),
+    source = re.compile(r"\/so((sm|lp)\d+)\/"),
+    sink = re.compile(r"si((sm|lp|ln)\d+)"),
+    configID = re.compile(r"icfg(-(?:[ab]|[ghijk]M){1}-\d+)"),
+    operator = re.compile(r"([\w\d_]+bar)\."),
+)
 class CfunMomentum:
     def __init__(self, indices: list[int], label: str):
         self.indices = indices
@@ -112,10 +120,13 @@ class ExceptionalConfig:
             except AttributeError:
                 raise ValueError("Exceptional configuration initialisation failed, {prop} is unset")
 
+    def __repr__(self):
+        return self.full_string
+
 class CfunMetadata:
     # If cfun name structure changes, the regex at the
     # top of this file will likely need to change.
-    def __init__(self, cfun_path: os.PathLike, **kwargs):
+    def __init__(self, cfun_path: os.PathLike, regex_patterns: dict[str, re.Pattern] = tommi_patterns, **kwargs):
         """
         Class to hold the metadata for correlation functions.
 
@@ -127,12 +138,15 @@ class CfunMetadata:
         ----------
         cfun_path : os.PathLike
             Full path to the correlation function.
+        regex_patterns : dict[str, re.Pattern]
+            Pattern set to use to parse properties from the cfun path.
         """
         for prop, val in kwargs.items():
             if prop in ("kd", "kappa"):
                 val = int(val)
             setattr(self, prop, val)
-        for prop, val in self.parse_cfun_path(cfun_path).items():
+
+        for prop, val in self.parse_cfun_path(cfun_path, regex_patterns).items():
             if prop in ("kd", "kappa"):
                 val = int(val)
             setattr(self, prop, val)
@@ -140,22 +154,17 @@ class CfunMetadata:
         self.cfun_path = cfun_path
 
     @staticmethod
-    def parse_cfun_path(cfun_path: os.PathLike) -> dict:
-        """Parses a correlation function using regex. Expected form of the correlation function:
-        /scratch/e31/tk9944/WorkingStorage/PhDRunThree/k13781/BF1/cfuns/shx23y08z26t00/SOsm250_icfg-kM-001630silp96.cascade0_1cascade0_1bar_uds.u.2cf"""
+    def parse_cfun_path(cfun_path: os.PathLike, regex_patterns: dict[str, re.Pattern] = tommi_patterns) -> dict:
+        """Parses a correlation function using regex. Expected form of the correlation function for tommi_patterns:
+        /scratch/e31/tk9944/WorkingStorage/PhDRunThree/k13781/BF1/cfuns/shx23y08z26t00/SOsm250_icfg-kM-001630silp96.cascade0_1cascade0_1bar_uds.u.2cf
+        
+        For differently formatted correlators, pass a different pattern set."""
         
         # Use search so that we can obtain only the capturing group
-        matches = dict(
-            kappa=re.search(kappa_pattern, cfun_path),
-            kd=re.search(kd_pattern, cfun_path),
-            shift=re.search(shift_pattern, cfun_path),
-            source=re.search(source_pattern, cfun_path),
-            sink=re.search(sink_pattern, cfun_path),
-            configID=re.search(configID_pattern, cfun_path),
-            operator=re.search(operator_pattern, cfun_path),
-            structure=re.search(structure_pattern, cfun_path),
-        )
-        # The actual values are at location 1 in the groups, 0 is the full match
+        matches = {}
+        for prop, pattern in regex_patterns.items():
+            matches[prop] = re.search(pattern, cfun_path)
+
         return {key: val.group(1) for key, val in matches.items() if val is not None}
 
 
@@ -175,32 +184,36 @@ def WriteSingleCorrelator(
         correlator.toFile(filename)
 
 
-def LoadCorrelators(correlatorList: list, dtype: str = ">c16") -> np.ndarray:
+def LoadCorrelators(correlatorList: list, dtype: str = ">c16", transpose: bool = False) -> np.ndarray:
     """
     Loads a list of correlators into a numpy array.
 
     Return array dimensions: [1:correlator_size , 1:num_correlators]
+     - Transposed if transpose = True
     """
-
-    # Allocating array for correlators. Need to know if correlators are
-    # mesons or baryons. Determine based on file size.
 
     # Size of first correlator in bytes
     size = Path(correlatorList[0]).stat().st_size
-    if size == 16384:  # Baryon 2pt: 1024 complex elements
-        array = np.zeros([1024, len(correlatorList)], dtype=dtype)
-    elif size == 1024:  # Meson 2pt: 64 complex elements
-        array = np.zeros([64, len(correlatorList)], dtype=dtype)
-    else:
+    if size not in (262144, 16384, 1024):
         raise ValueError(f"Correlator size: {size} bytes not supported")
+
+    # Double precision complex is 16 bytes
+    dimensions = [len(correlatorList), size // 16] if transpose else [size // 16, len(correlatorList)]
+    array = np.zeros(dimensions, dtype=dtype)
 
     # Loading correlators
     for i, correlator in enumerate(correlatorList):
+        if i%1000 == 0:
+            print(f"Loading {i+1}st of {len(correlatorList)} correlators")
         # Checking all correlators are same size
         if Path(correlator).stat().st_size != size:
             raise ValueError("Correlators in correlatorList are not all same size.")
+        
         # Loading correlator
-        array[:, i] = LoadSingleCorrelator(correlator, dtype=dtype)
+        if transpose:
+            array[i, :] = LoadSingleCorrelator(correlator, dtype=dtype)
+        else:
+            array[:, i] = LoadSingleCorrelator(correlator, dtype=dtype)
     return array
 
 

@@ -12,7 +12,7 @@ def _k_13700():
     """_
     Hea_viest PACS-CS ensemble.
     kap_pa: 13700
-    m_p_i:  701 MeV
+    m_pi:  701 MeV
     a:     0.1022 fm
     """
     return {
@@ -107,7 +107,7 @@ def _k_13781():
         "kappa": 13781,
         "prefixes": ("gM", "hM", "iM", "jM", "kM", "M"),
         "m_pi": 156,
-        "m_pi_phys": None,
+        "m_pi_phys": 169,
         "a": 0.0933,
         "traj_store": 20,
         "tau": 0.5,
@@ -337,7 +337,7 @@ class PACSRun:
         try:
             return getattr(self.ensemble,attr)
         except AttributeError:
-            raise AttributeError(f"PACSRun has not attribute {attr}")
+            raise AttributeError(f"PACSRun has no attribute {attr}")
 
 
 # Dictionary for accessing the PACS ensembles. Otherwise the objects would be
