@@ -3,6 +3,8 @@ import json
 import os
 import pprint
 import yaml
+import contextlib
+import sys
 
 
 def GetCombinations(detailSet):
@@ -192,3 +194,15 @@ class Metadata:
 
     def __repr__(self):
         return self.full_metadata
+
+
+class DummyFile(object):
+    def write(self, x): pass
+
+    
+@contextlib.contextmanager
+def suppress_stdout():
+    save_stdout = sys.stdout
+    sys.stdout = DummyFile()
+    yield
+    sys.stdout = save_stdout
