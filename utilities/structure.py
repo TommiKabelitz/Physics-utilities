@@ -1,8 +1,16 @@
 from __future__ import annotations
 from collections.abc import Sequence
 
-
-_quarks = ["u", "d", "s", "nl", "nh", "l", "h"]
+# Doubles as mapping to quark mass
+_quarks = {
+    "u":"l",
+    "d":"l",
+    "s":"h",
+    "nl":"l",
+    "nh":"h",
+    "l":"l",
+    "h":"h",
+}
 
 
 class Structure(Sequence):
@@ -13,8 +21,9 @@ class Structure(Sequence):
             quark_1, quark_2, quark_3 = structure
         else:
             raise TypeError("structure must be str, list or tuple")
-
+        
         self._structure_list = [quark_1, quark_2, quark_3]
+        self.u, self.d, self.s = self._structure_list
         self._structure_str = quark_1 + quark_2 + quark_3
 
     @staticmethod
@@ -53,3 +62,7 @@ class Structure(Sequence):
 
     def __len__(self):
         return len(self._structure_list)
+
+    def as_neutral_structure(self):
+        """Returns structure purely in terms of light and heavy"""
+        return Structure([_quarks[q] for q in self._structure_list])

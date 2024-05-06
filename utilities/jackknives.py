@@ -1,4 +1,5 @@
 import functools
+import os
 
 import numpy as np
 
@@ -64,3 +65,42 @@ class JackknifeEnsemble:
     @property
     def sum(self):
         return self.jackknives.sum()
+    
+    def write_jackknives(self, filepath: os.PathLike, **kwargs):
+        np.savetxt(filepath, self.jackknives, *kwargs)
+        
+    @classmethod
+    def from_file(cls, filepath: os.PathLike, **kwargs):
+        jackknives = np.loadtxt(filepath, **kwargs)
+        if jackknives.ndim != 1:
+            raise ValueError("Contents of file must be one dimensional array.")
+        return cls(jackknives)
+    
+    def __add__(self, other):
+        jackknives = self.jackknives + other.jackknives
+        return JackknifeEnsemble(jackknives)
+
+    def __sub__(self, other):
+        jackknives = self.jackknives - other.jackknives
+        return JackknifeEnsemble(jackknives)
+
+    def __mul__(self, other):
+        jackknives = self.jackknives * other.jackknives
+        return JackknifeEnsemble(jackknives)
+
+    def __truediv__(self, other):
+        jackknives = self.jackknives / other.jackknives
+        return JackknifeEnsemble(jackknives)
+
+    def __rtruediv__(self, other):
+        jackknives = self.jackknives / other.jackknives
+        return JackknifeEnsemble(jackknives)
+
+    def __floordiv__(self, other):
+        jackknives = self.jackknives // other.jackknives
+        return JackknifeEnsemble(jackknives)
+
+    def __pow__(self, pow):
+        jackknives = self.jackknives ** pow
+        return JackknifeEnsemble(jackknives)
+
