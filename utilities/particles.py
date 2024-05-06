@@ -81,6 +81,18 @@ class Particle:
             composition += [quark] * count
         return composition
 
+    def composition_with_structure(self, structure: Structure):
+        """
+        Returns the true quark content of this particle with the given structure.
+        Eg. proton @ [h,d,s] -> [h,h,d]
+        """
+        if type(structure) is not Structure:
+            try:
+                structure = Structure(structure)
+            except TypeError:
+                raise TypeError(f"Could not convert {structure = } to Structure.")
+        return [getattr(structure, quark) for quark in self.composition]
+        
 
 proton_1 = Particle(
     levi_civita_indices=["a;b;c;"],
