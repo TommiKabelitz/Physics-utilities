@@ -201,8 +201,11 @@ class DummyFile(object):
 
     
 @contextlib.contextmanager
-def suppress_stdout():
-    save_stdout = sys.stdout
-    sys.stdout = DummyFile()
-    yield
-    sys.stdout = save_stdout
+def suppress_stdout(suppress=True):
+    if suppress:
+        save_stdout = sys.stdout
+        sys.stdout = DummyFile()
+        yield
+        sys.stdout = save_stdout
+    else: 
+        yield
