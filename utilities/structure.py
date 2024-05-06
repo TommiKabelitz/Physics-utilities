@@ -1,4 +1,6 @@
+from __future__ import annotations
 from collections.abc import Sequence
+
 
 _quarks = ["u", "d", "s", "nl", "nh", "l", "h"]
 
