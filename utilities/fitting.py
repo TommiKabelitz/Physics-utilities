@@ -60,6 +60,7 @@ class Fit_1d:
                     "Setting uncertainties using covariance matrix from jackknives."
                 )
                 self.covariance_matrix = covariance_matrix(jackknives)
+                logger.debug(f"Covariance matrix:\n{self.covariance_matrix}")
                 self.y = gv.gvar(y, self.covariance_matrix)
             elif jackknives is None:
                 self.y = gv.gvar(y, y_err)
@@ -87,7 +88,7 @@ class Fit_1d:
             diagonal_covariance_mat = gv.evalcov(self.y) * np.eye(self.y.size)
             self.uncorrelated_y = gv.gvar(gv.mean(self.y), diagonal_covariance_mat)
             self.naive_fit = lsq.nonlinear_fit(
-                data=(self.x, self.y), fcn=self.fcn, p0=[gv.mean(self.average_fit.p)]
+                data=(self.x, self.y), fcn=self.fcn, p0=self.initial_guess
             )
 
         if self.fit_jackknives:
@@ -160,7 +161,10 @@ class PolarisabilityFit(Fit_1d):
                 self.mass_jackknives.jackknives, particle, structure, spacing=ensemble.a
             )
             jackknives = [JackknifeEnsemble(self.energy_shift_jackknives[i].jackknives - self.landau_jackknives * x[i]) for i in range(self.num_kd)]
-            
+            # If we have jackknives, passing only means for data will
+            # mean the jackknives are used to calculate the covariance 
+            # matrix
+            y = gv.mean(y)
         else:
             jackknives = None
 
