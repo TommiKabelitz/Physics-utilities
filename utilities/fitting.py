@@ -1,3 +1,4 @@
+from __future__ import annotations 
 import functools
 import logging
 
@@ -7,6 +8,7 @@ import natpy as nat
 import numpy as np
 
 from utilities import jackknives, structure, particles, configIDs
+
 
 
 JackknifeEnsemble = jackknives.JackknifeEnsemble
@@ -27,6 +29,7 @@ class Fit_1d:
         y_err: np.ndarray = None,
         jackknives: list[JackknifeEnsemble] = None,
         initial_guess: list[float] = None,
+        prior: dict[str,gv.gvar] = None,
         calculate_naive_chi_sq: bool = False,
         fit_jackknives: bool = False,
     ):
@@ -67,11 +70,14 @@ class Fit_1d:
         else:
             raise ValueError("y must be array of gvars or floats.")
 
-        if initial_guess is None:
+        if initial_guess is None and prior is None:
             logger.info("Taking initial guess to be zero for all fit parameters.")
             self.initial_guess = [0] * self.nparams
+        elif initial_guess is not None and prior is not None:
+            raise ValueError("Cannot have non-None prior and initial guess.")
         else:
             self.initial_guess = initial_guess
+            self.prior = prior
 
         self.calculate_naive_chi_sq = calculate_naive_chi_sq
         if fit_jackknives and jackknives is None:
@@ -81,14 +87,20 @@ class Fit_1d:
 
     def do_fit(self):
         self.average_fit = lsq.nonlinear_fit(
-            data=(self.x, self.y), fcn=self.fcn, p0=self.initial_guess
+            data=(self.x, self.y), fcn=self.fcn, p0=self.initial_guess, prior=self.prior,
         )
+
+        if self.calculate_naive_chi_sq or self.fit_jackknives:
+            if self.prior is not None:
+                guess_args = {"prior": self.prior}
+            else:
+                guess_args = {"p0": [gv.mean(self.average_fit.p)]}
 
         if self.calculate_naive_chi_sq:
             diagonal_covariance_mat = gv.evalcov(self.y) * np.eye(self.y.size)
             self.uncorrelated_y = gv.gvar(gv.mean(self.y), diagonal_covariance_mat)
             self.naive_fit = lsq.nonlinear_fit(
-                data=(self.x, self.uncorrelated_y), fcn=self.fcn, p0=self.initial_guess
+                data=(self.x, self.uncorrelated_y), fcn=self.fcn, **guess_args
             )
 
         if self.fit_jackknives:
@@ -109,7 +121,7 @@ class Fit_1d:
                     lsq.nonlinear_fit(
                         data=(self.x, y_data, y_err),
                         fcn=self.fcn,
-                        p0=gv.mean(self.average_fit.p),
+                        **guess_args,
                     )
                 )
                 self.jackknife_fits_values[icon] = self.jackknife_fits[icon].pmean

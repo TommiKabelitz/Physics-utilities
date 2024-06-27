@@ -9,6 +9,7 @@ There are also a couple of utility functions at the bottom
 QuarkCharge, HadronicCharge
 
 """
+from __future__ import annotations
 from utilities import structure
 
 Structure = structure.Structure

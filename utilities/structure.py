@@ -1,3 +1,4 @@
+from __future__ import annotations
 from collections.abc import Sequence
 
 # Doubles as mapping to quark mass
@@ -10,6 +11,7 @@ _quarks = {
     "l":"l",
     "h":"h",
 }
+
 
 class Structure(Sequence):
     def __init__(self, structure: str | list):
