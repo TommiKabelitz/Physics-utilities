@@ -88,7 +88,7 @@ class Fit_1d:
             diagonal_covariance_mat = gv.evalcov(self.y) * np.eye(self.y.size)
             self.uncorrelated_y = gv.gvar(gv.mean(self.y), diagonal_covariance_mat)
             self.naive_fit = lsq.nonlinear_fit(
-                data=(self.x, self.y), fcn=self.fcn, p0=self.initial_guess
+                data=(self.x, self.uncorrelated_y), fcn=self.fcn, p0=self.initial_guess
             )
 
         if self.fit_jackknives:
@@ -104,7 +104,7 @@ class Fit_1d:
                     jackknife_ensemble.uncertainties[icon]
                     for jackknife_ensemble in self.jackknives
                 ]
-                
+
                 self.jackknife_fits.append(
                     lsq.nonlinear_fit(
                         data=(self.x, y_data, y_err),
@@ -114,6 +114,7 @@ class Fit_1d:
                 )
                 self.jackknife_fits_values[icon] = self.jackknife_fits[icon].pmean
             self.jackknife_fits_values = JackknifeEnsemble(self.jackknife_fits_values)
+
 
 def covariance_matrix(jackknife_ensembles: list[JackknifeEnsemble]) -> np.ndarray:
     ensemble_averages = np.asarray(
@@ -153,16 +154,22 @@ class PolarisabilityFit(Fit_1d):
             mass, particle, structure, spacing=ensemble.a
         )
         y = energy_shift - self.landau_term * x
-        
+
         if fit_jackknives and None not in (mass_jackknives, energy_shift_jackknives):
             self.mass_jackknives = mass_jackknives
             self.energy_shift_jackknives = energy_shift_jackknives
             self.landau_jackknives = self.calculate_landau(
                 self.mass_jackknives.jackknives, particle, structure, spacing=ensemble.a
             )
-            jackknives = [JackknifeEnsemble(self.energy_shift_jackknives[i].jackknives - self.landau_jackknives * x[i]) for i in range(self.num_kd)]
+            jackknives = [
+                JackknifeEnsemble(
+                    self.energy_shift_jackknives[i].jackknives
+                    - self.landau_jackknives * x[i]
+                )
+                for i in range(self.num_kd)
+            ]
             # If we have jackknives, passing only means for data will
-            # mean the jackknives are used to calculate the covariance 
+            # mean the jackknives are used to calculate the covariance
             # matrix
             y = gv.mean(y)
         else:
@@ -180,15 +187,16 @@ class PolarisabilityFit(Fit_1d):
         )
 
     @staticmethod
-    def convert_fit(fit_value: gv.GVar | np.ndarray, spacing: float, Nx = 32, Ny = 32):
+    def convert_fit(fit_value: gv.GVar | np.ndarray, spacing: float, Nx=32, Ny=32):
         HBARC = 0.1973269718  # GeV fm
-        q_d = -1/3
+        q_d = -1 / 3
         return (
             -2
             * fit_value
             * nat.constants.alpha.value
-            * (-1 / 3) ** 2
-            * (spacing**4 * (Nx * Ny / 2 / np.pi) ** 2 / HBARC)
+            * q_d**2
+            * (spacing**4 * (Nx * Ny / 2 / np.pi) ** 2)
+            / HBARC
         )
 
     @staticmethod
@@ -199,7 +207,7 @@ class PolarisabilityFit(Fit_1d):
     def calculate_landau(
         mass: float | np.ndarray, particle: str, structure: Structure, spacing: float
     ) -> float | np.ndarray:
-        
+
         particle_charge = particles.get_particle_charge(particle, structure)
         q_d = -1 / 3
         Nx = Ny = 32
@@ -213,6 +221,86 @@ class PolarisabilityFit(Fit_1d):
             / mass
         )
         return landau
+
+
+class PolarisabilityDiffFit(PolarisabilityFit):
+    def __init__(
+        self,
+        particle_1: particles.Particle,
+        particle_2: particles.Particle,
+        ensemble: configIDs.PACSEnsemble,
+        mass_1: gv.GVar,
+        mass_2: gv.GVar,
+        energy_shift: np.ndarray,
+        energy_shift_jackknives: list[JackknifeEnsemble] = None,
+        mass_1_jackknives: JackknifeEnsemble = None,
+        mass_2_jackknives: JackknifeEnsemble = None,
+        initial_guess: float = 0,
+        calculate_naive_chi_sq: bool = True,
+        fit_jackknives: bool = False,
+    ):
+        self.particle_1 = particle_1
+        self.particle_2 = particle_2
+        self.ensemble = ensemble
+        self.mass_1 = mass_1
+        self.mass_2 = mass_2
+        self.energy_shift = energy_shift
+        self.num_kd = energy_shift.size
+
+        x = np.arange(1, self.num_kd + 1)
+
+        self.landau_term_1 = self.calculate_landau(
+            mass_1 , particle_1.operator, particle_1.structure, spacing=ensemble.a
+        )
+        self.landau_term_2 = self.calculate_landau(
+            mass_2, particle_2.operator, particle_2.structure, spacing=ensemble.a
+        )
+        self.landau_term = self.landau_term_1 - self.landau_term_2
+
+        y = energy_shift - self.landau_term * x
+
+        if fit_jackknives and None not in (
+            mass_1_jackknives,
+            mass_2_jackknives,
+            energy_shift_jackknives,
+        ):
+            self.mass_1_jackknives = mass_1_jackknives
+            self.mass_2_jackknives = mass_2_jackknives
+            self.energy_shift_jackknives = energy_shift_jackknives
+            self.landau_1_jackknives = self.calculate_landau(
+                self.mass_1_jackknives,
+                particle_1.operator,
+                particle_1.structure,
+                spacing=ensemble.a,
+            )
+            self.landau_2_jackknives = self.calculate_landau(
+                self.mass_2_jackknives,
+                particle_2.operator,
+                particle_2.structure,
+                spacing=ensemble.a,
+            )
+            self.landau_jackknives = self.landau_1_jackknives - self.landau_2_jackknives
+            jackknives = [
+                self.energy_shift_jackknives[i] - self.landau_jackknives * x[i]
+                for i in range(self.num_kd)
+            ]
+            # If we have jackknives, passing only means for data will
+            # mean the jackknives are used to calculate the covariance
+            # matrix
+            y = gv.mean(y)
+        else:
+            jackknives = None
+
+        super(PolarisabilityFit, self).__init__(
+            fcn=self._quadfit,
+            nparams=1,
+            x=x,
+            y=y,
+            jackknives=jackknives,
+            initial_guess=[initial_guess],
+            calculate_naive_chi_sq=calculate_naive_chi_sq,
+            fit_jackknives=fit_jackknives,
+        )
 
 
 if __name__ == "__main__":
