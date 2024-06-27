@@ -13,7 +13,9 @@ _quarks = {
 
 class Structure(Sequence):
     def __init__(self, structure: str | list):
-        if isinstance(structure, str):
+        if type(structure) is Structure:
+            quark_1, quark_2, quark_3 = structure
+        elif isinstance(structure, str):
             quark_1, quark_2, quark_3 = self.parse_structure_string(structure)
         elif isinstance(structure, (tuple, list)):
             quark_1, quark_2, quark_3 = structure
