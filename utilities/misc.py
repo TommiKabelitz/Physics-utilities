@@ -1,7 +1,10 @@
 import itertools as it
 import json
 import os
+import pathlib
 import pprint
+import random
+import string
 import yaml
 import contextlib
 import sys
@@ -209,3 +212,39 @@ def suppress_stdout(suppress=True):
         sys.stdout = save_stdout
     else: 
         yield
+        
+        
+class TempDir:
+    def __init__(self, base_path: os.PathLike, delete_on_exit: bool = True):
+        self.base_path = pathlib.Path(base_path)
+        self.delete_on_exit = delete_on_exit
+        while True:
+            alphanum_str = ''.join(random.choices(string.ascii_letters + string.digits, k=8))
+            self.temp_dir = self.base_path / f"temp_{alphanum_str}/"
+            if self.temp_dir.exists():
+                pass
+            elif self.temp_dir.is_file():
+                pass
+            else:
+                break
+        try:
+            self.temp_dir.mkdir(parents=True, exist_ok=False)
+        except FileExistsError:
+            pass
+            
+    def __enter__(self) -> pathlib.Path:
+        return self.temp_dir
+    
+    def __exit__(self, type, value, traceback):
+        if not self.delete_on_exit and not self.temp_dir.is_dir():
+            return
+        self._delete_dir(self.temp_dir)
+                
+    @staticmethod
+    def _delete_dir(directory: pathlib.Path):
+        for sub in directory.iterdir():
+            if sub.is_dir():
+                TempDir._delete_dir(sub)
+            else:
+                sub.unlink()
+        directory.rmdir()
