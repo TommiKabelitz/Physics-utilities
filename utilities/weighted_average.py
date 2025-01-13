@@ -10,11 +10,12 @@ logger = logging.getLogger(__name__)
 logging.Formatter(fmt="%(name)s(%(lineno)d)::%(levelname)-8s: %(message)s")
 
 
-# Note: If you want to modify WeightedAverage in the future, it shouldn't be too hard to 
+# Note: If you want to modify WeightedAverage in the future, it shouldn't be too hard to
 #       keep the WeightedAverage_multifit working at the same time as they essesntially
 #       only differ by column manipulation. However, if that gets too annoying, I would
-#       recommend just starting dumping the multifit version in its own file with a 
+#       recommend just starting dumping the multifit version in its own file with a
 #       working version of the parent class so that it doesn't get broken by changes.
+
 
 class WeightedAverage:
     def __init__(
@@ -24,19 +25,26 @@ class WeightedAverage:
         err_label: str,
         chi2_label: str = "chi2",
         ndof_label: str = "ndof",
+        nparams: int = None,
+        weight_criterion: str = "p_value",
     ):
         """
-        Class to determine the weighted average of some data given the values, uncertainties, chi 
-        squares and number of degrees of freedom. Based on arxiv.org/abs/2003.12130.`
+        Class to determine the weighted average of some data using either a p_value based method
+        from arxiv.org/abs/2003.12130 or using a method based on the Akaike Information Criterion
+        from arxiv.org/abs/2002.12347.
 
-        The weighted average uses the chi_square distribution to give fits p-values from which
-        weights may be assigned. The weight of each fit is determined from the chi^2, ndof and
-        uncertainty of the fit. Weights are normalised to sum to 1.
+        The former depends on the chi^2, ndof and uncertainty of the fit to determine the weights.
+        The latter depends on the chi^2, ndata and nparams to determine the weights.
 
-        Data should be formatted in a DataFrame with a columns of chi^2 values, degrees of 
+        chi2 and ndof are used in both cases, directly in the p_value case and to determine the
+        number of data points in the AIK case. nparams is only required in the AIK case.
+
+        Weights are normalised to sum to 1.
+
+        Data should be formatted in a DataFrame with a columns of chi^2 values, degrees of
         freedom, fit values and variances. The column labels are specified in the call signature.
 
-        All column labels must be specified as arguments at initialisation. 
+        All column labels must be specified as arguments at initialisation.
 
         Parameters
         ----------
@@ -50,7 +58,10 @@ class WeightedAverage:
             Column label for column holding chi square values. Note: not reduced chi square, by default "chi2"
         ndof_label : str, optional
             Column label for column holding degrees of freedom values, by default "ndof"
-
+        nparams : int, optional
+            Number of parameters in the fit required for use of AIK criterion, by default None
+        weight_criterion : str, optional
+            The criterion to use for weighting. Options are ("p_value", "AIK"), by default "p_value"
         """
         self.data = data
         self.working_df = pd.DataFrame()
@@ -60,6 +71,17 @@ class WeightedAverage:
             err=err_label,
             value=value_label,
         )
+        if weight_criterion not in ("p_value", "AIK"):
+            raise ValueError(
+                "Invalid weight criterion. Options are 'p_value' or 'AIK'."
+            )
+        if weight_criterion == "p_value":
+            self.calculate_weights = self._p_value_weights
+        else:
+            if nparams is None:
+                raise ValueError("nparams must be specified for the AIK criterion.")
+            self.calculate_weights = self._AIK_weights
+            self.nparams = nparams
 
     def do_average(self, recalculate_weights: bool = False) -> gv.GVar:
         """
@@ -118,11 +140,31 @@ class WeightedAverage:
         logger.debug(f"{result = }")
         return result
 
-
-    def calculate_weights(self) -> np.ndarray:
+    def _AIK_weights(self) -> np.ndarray:
         """
-        Calculate the weights for each row. See documentation of the WeightedAverage 
-        class for implementation details on the weight calculation.
+        Calculate the weights for each row in the AIK method. See documentation of the
+        WeightedAverage class for implementation details on the weight calculation.
+
+        Weights are returned in a vector and also added to the working DataFrame.
+
+        Returns
+        -------
+        np.ndarray
+            Array of weights.
+        """
+
+        logger.debug("Calculating weights")
+
+        self.working_df["weight"] = self.data.apply(
+            self.df_AIK_weight, axis=1, nparams=self.nparams
+        )
+        self.working_df["weight"] = self.working_df["weight"] / self.working_df["weight"].sum()
+        return self.working_df["weight"].to_numpy()
+
+    def _p_value_weights(self) -> np.ndarray:
+        """
+        Calculate the weights for each row in the p_value method. See documentation of the
+        WeightedAverage class for implementation details on the weight calculation.
 
         Weights are returned in a vector and also added to the working DataFrame.
 
@@ -135,7 +177,9 @@ class WeightedAverage:
         logger.debug("Calculating weights")
         self.working_df["p_value"] = self.data.apply(self.df_p_value, axis=1)
         self.working_df["err"] = self.data[self.labels.err]
-        normalisation = (self.working_df["err"] ** (-2) * self.working_df["p_value"]).sum()
+        normalisation = (
+            self.working_df["err"] ** (-2) * self.working_df["p_value"]
+        ).sum()
 
         self.working_df["weight"] = self.working_df.apply(
             self.df_weight, axis=1, normalisation=normalisation
@@ -161,8 +205,14 @@ class WeightedAverage:
     @staticmethod
     def df_weight(df_row, normalisation: float):
         """For applying weight to a DataFrame"""
-        return WeightedAverage.weight(
-            df_row["p_value"], df_row["err"], normalisation
+        return WeightedAverage.weight(df_row["p_value"], df_row["err"], normalisation)
+
+    @staticmethod
+    def df_AIK_weight(df_row, nparams: int):
+        """For applying AIK weight to a DataFrame"""
+        ndata = df_row["ndof"] + nparams
+        return np.exp(
+            -(df_row["chi2"] + 2 * nparams - ndata) / 2
         )
 
     @property
@@ -183,6 +233,7 @@ class WeightedAverage:
                 "P values not calculated yet. Call calculate_weights or do_average to calculate P values."
             )
 
+
 class WeightedAverage_multifit(WeightedAverage):
     def __init__(
         self,
@@ -194,25 +245,25 @@ class WeightedAverage_multifit(WeightedAverage):
         ndof_label: str = "ndof",
     ):
         """
-        Generalisation of WeightedAverage class to allow pseudo fitting of multiple datasets 
-        of equal length at once. One set of weights will be calculated based on the chi^2, 
-        ndof, and uncertainty column. These weights are then used for all datasets though 
-        each data set will use its own uncertainties to calculate the final uncertainty. 
-        
-        An example case is simply taking the chi^2 and uncertainty of the first data set and 
-        using that for the weights. This is a reasonable approximation if the data sets are 
+        Generalisation of WeightedAverage class to allow pseudo fitting of multiple datasets
+        of equal length at once. One set of weights will be calculated based on the chi^2,
+        ndof, and uncertainty column. These weights are then used for all datasets though
+        each data set will use its own uncertainties to calculate the final uncertainty.
+
+        An example case is simply taking the chi^2 and uncertainty of the first data set and
+        using that for the weights. This is a reasonable approximation if the data sets are
         correlated and as such their uncertainties and chi^2 will tend to favour and disfavour
-        the same windows. 
-        
+        the same windows.
+
         Alternatively, the err and chi^2 column may be obtained from some kind of aggregation.
-        eg. Taking the average or maximum of the chi^2 values of the data sets for each set of 
+        eg. Taking the average or maximum of the chi^2 values of the data sets for each set of
         fits could work. For the error, choosing the min, max or an aggregate in quadrature
         may also work depending on use case.
 
-        Data should be formatted in a DataFrame with a column of chi^2 values and a column of 
+        Data should be formatted in a DataFrame with a column of chi^2 values and a column of
         degrees of freedom. The actual values and variances must be further columns of the DataFrame.
 
-        All column labels must be specified as arguments at initialisation. 
+        All column labels must be specified as arguments at initialisation.
         The value and variance column labels are assumed to match elementwise.
 
         Parameters
@@ -278,14 +329,13 @@ class WeightedAverage_multifit(WeightedAverage):
         for i, err_col in enumerate(self.labels.error_cols):
             var_col = f"{err_col}^2"
             val_col = self.labels.value_cols[i]
-            
+
             self.labels.variance_cols.append(var_col)
             self.working_df[var_col] = self.data[err_col] ** 2
 
             result = self._do_average(val_col, var_col)
             values.append(result)
         return values
-
 
 
 class Labels:
