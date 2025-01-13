@@ -1,5 +1,12 @@
 import re
 
+# m_pi is the PACS provided mass of the ensemble. It is extrapolated
+# lazily, using a single lattice spacing for all ensembles. It is used
+# for labelling ensembles but should not be used for actual computation
+# m_pi_phys is the pion mass with proper extrapolation, where the scale
+# is set using the Sommer scale. The lattice spacings given for each 
+# ensemble are the spacings that arise from this scale setting.
+
 runID_pattern = re.compile(r"(a|b|gM|hM|iM|jM|kM)")
 
 # Functions holding the details for each ensemble. 
