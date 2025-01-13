@@ -6,6 +6,7 @@ import gvar as gv
 import lsqfit as lsq
 import natpy as nat
 import numpy as np
+from scipy.optimize import curve_fit
 
 from utilities import jackknives, structure, particles, configIDs
 
@@ -29,7 +30,7 @@ class Fit_1d:
         y_err: np.ndarray = None,
         jackknives: list[JackknifeEnsemble] = None,
         initial_guess: list[float] = None,
-        prior: dict[str,gv.gvar] = None,
+        prior: dict[str,gv.GVar] = None,
         calculate_naive_chi_sq: bool = False,
         fit_jackknives: bool = False,
     ):
@@ -58,7 +59,7 @@ class Fit_1d:
                 raise ValueError(
                     "y is array of floats so either y_err or jackknives must be non-None."
                 )
-            if y_err is None:
+            elif y_err is None:
                 logger.info(
                     "Setting uncertainties using covariance matrix from jackknives."
                 )
@@ -190,6 +191,7 @@ class PolarisabilityFit(Fit_1d):
         super().__init__(
             fcn=self._quadfit,
             nparams=1,
+
             x=x,
             y=y,
             jackknives=jackknives,
@@ -313,6 +315,68 @@ class PolarisabilityDiffFit(PolarisabilityFit):
             calculate_naive_chi_sq=calculate_naive_chi_sq,
             fit_jackknives=fit_jackknives,
         )
+
+class SimpleFit_1d:
+    def __init__(
+        self,
+        fcn: callable,
+        nparams: int,
+        x: np.ndarray,
+        y: np.ndarray,
+        initial_guess: list[float] = None,
+    ):
+        self.fcn = fcn
+        self.nparams = nparams
+        if not isinstance(x,np.ndarray):
+            self.x = np.asarray(x)
+        else:
+            self.x = x
+        if not isinstance(y,np.ndarray):
+            self.y = np.asarray(y)
+        else:
+            self.y = y
+        self.initial_guess = initial_guess
+        
+    def do_fit(self):
+        self.fit = curve_fit(self.fcn, self.x, self.y, p0=self.initial_guess, full_output=True)
+
+
+class SimplePolarisabilityFit(SimpleFit_1d):
+    def __init__(
+        self,
+        particle: str,
+        structure: Structure,
+        ensemble: configIDs.PACSEnsemble,
+        mass: float,
+        energy_shift: np.ndarray,
+        initial_guess: float = 0,
+    ):
+        self.particle = particle
+        self.structure = structure
+        self.ensemble = ensemble
+        self.mass = mass
+        if not isinstance(energy_shift,np.ndarray):
+            self.energy_shift = np.asarray(energy_shift)
+        else:
+            self.energy_shift = energy_shift
+        self.num_kd = energy_shift.size
+        
+        x = np.arange(1, self.num_kd + 1)
+        
+        self.landau_term = PolarisabilityFit.calculate_landau(
+            mass, particle, structure, spacing=ensemble.a
+        )
+        
+        y = energy_shift - self.landau_term * x
+
+        super().__init__(
+            fcn=PolarisabilityFit._quadfit,
+            nparams=1,
+            x=x,
+            y=y,
+            initial_guess=[initial_guess],   
+        )
+
 
 
 if __name__ == "__main__":
