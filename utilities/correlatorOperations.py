@@ -181,9 +181,14 @@ def WriteSingleCorrelator(
     if swapEndian is True:
         correlator.byteswap().tofile(filename)
     else:
-        correlator.toFile(filename)
+        correlator.tofile(filename)
 
 
+type_sizes = {
+    ">c16": 16,
+    ">f8": 8,
+    }
+        
 def LoadCorrelators(correlatorList: list, dtype: str = ">c16", transpose: bool = False) -> np.ndarray:
     """
     Loads a list of correlators into a numpy array.
@@ -194,11 +199,12 @@ def LoadCorrelators(correlatorList: list, dtype: str = ">c16", transpose: bool =
 
     # Size of first correlator in bytes
     size = Path(correlatorList[0]).stat().st_size
-    if size not in (262144, 16384, 1024):
+    if size not in (262144, 16384, 1024, 1344):
         raise ValueError(f"Correlator size: {size} bytes not supported")
 
+    dtype_size = type_sizes[dtype]
     # Double precision complex is 16 bytes
-    dimensions = [len(correlatorList), size // 16] if transpose else [size // 16, len(correlatorList)]
+    dimensions = [len(correlatorList), size // dtype_size] if transpose else [size // dtype_size, len(correlatorList)]
     array = np.zeros(dimensions, dtype=dtype)
 
     # Loading correlators
@@ -208,7 +214,7 @@ def LoadCorrelators(correlatorList: list, dtype: str = ">c16", transpose: bool =
         # Checking all correlators are same size
         if Path(correlator).stat().st_size != size:
             raise ValueError("Correlators in correlatorList are not all same size.")
-        
+
         # Loading correlator
         if transpose:
             array[i, :] = LoadSingleCorrelator(correlator, dtype=dtype)
@@ -228,3 +234,49 @@ def AverageCorrelators(correlators: np.ndarray) -> np.ndarray:
     averageDimension = len(arrayShape) - 1  # -1 because python indexes from 0
     average = np.mean(correlators, axis=averageDimension)
     return average
+
+
+def simplify_corelator(correlator_path: os.PathLike, init_dtype: str = ">c16", real: bool = True, diag_dirac: bool = True, t_max: int = 64):
+    """
+    Given a path to a correlator, reduce its file size by removing some information. Writes the new correlator to a new file with the extension updated to reflect the changes.
+
+    Parameters
+    ----------
+    correlator_path : os.PathLike
+        Path to the correlator file
+    init_dtype : str, optional
+        Data type for reading the correlator, by default ">c16"
+    real : bool, optional
+        Cast to real, by default True
+    diag_dirac : bool, optional
+        Take only the diagonal of the dirac indices, by default True
+    t_max : int, optional
+        Reduce the time slices included to [1,t_max], by default 64
+    """
+    correlator_path = Path(correlator_path)
+    print(f"Loading {correlator_path=}")
+    correlator = LoadSingleCorrelator(correlator_path, dtype=init_dtype)
+    if correlator.size == 64:
+        shape = (64,)
+        diag_dirac = False
+    elif correlator.size == 64*4*4:
+        shape = (64,4,4)
+    else:
+        raise ValueError("Correlator unexpected size")
+    reshaped = correlator.reshape(shape)
+    
+    new_extension = ""
+    if real:
+        reshaped = np.real(reshaped)
+        new_extension += ".real"
+    if diag_dirac:
+        reshaped = np.einsum("ijj->ij", reshaped)
+        new_extension += ".diag"
+    if t_max < 64:
+        reshaped = reshaped[:t_max,...]
+        new_extension += f".t{t_max}"
+    
+    new_path = correlator_path.with_suffix(new_extension + correlator_path.suffix)
+    swap_endian = ">" in init_dtype
+    print(f"Writing to {new_path=}")
+    WriteSingleCorrelator(new_path, reshaped, swapEndian=swap_endian)
