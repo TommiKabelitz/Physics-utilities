@@ -205,13 +205,26 @@ class DummyFile(object):
     
 @contextlib.contextmanager
 def suppress_stdout(suppress=True):
-    if suppress:
-        save_stdout = sys.stdout
-        sys.stdout = DummyFile()
-        yield
-        sys.stdout = save_stdout
-    else: 
-        yield
+    capture_stdout(destination=None)
+
+
+@contextlib.contextmanager
+def capture_stdout(destination, capture_stderr=False):
+    """Capture stdout from code running inside context manager. Pass destination=None to discard output. Else pass stream"""
+    if destination is None:
+        destination = DummyFile
+
+    if capture_stderr:
+        save_stderr = sys.stderr
+        sys.stderr = destination
+
+    save_stdout = sys.stdout
+    sys.stdout = destination
+    yield
+    if capture_stderr:
+        sys.stderr = save_stderr
+    sys.stdout = save_stdout
+
         
         
 class TempDir:
@@ -248,3 +261,22 @@ class TempDir:
             else:
                 sub.unlink()
         directory.rmdir()
+        
+        
+def count_file_lines(fname: os.PathLike, is_binary: bool = False) -> int:
+    
+    if is_binary:
+        # https://stackoverflow.com/a/68385697/353337
+        def _make_gen(reader):
+            while True:
+                b = reader(2 ** 16)
+                if not b: break
+                yield b
+
+        with open(fname, "rb") as f:
+            count = sum(buf.count(b"\n") for buf in _make_gen(f.raw.read))
+        return count
+    else:
+        with open(fname, "r") as f:
+            count = sum(1 for line in f)
+        return count
